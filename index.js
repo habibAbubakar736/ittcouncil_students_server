@@ -22,9 +22,13 @@ app.use('/Users', UsersRouter);
 
 
 app.get('/', (req, res) => {
-    res.send('Hello World!');
+    res.send('hii i am habib abubakar ... !');
 });
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, (error) => {
+    if (error) {
+        console.error('Error starting server:', error);
+    } else {
+        console.log(`Server is running on port ${PORT}`);
+    }
 });

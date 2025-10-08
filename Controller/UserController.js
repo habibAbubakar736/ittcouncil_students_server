@@ -3,10 +3,14 @@ const jwt = require('jsonwebtoken');
 require("dotenv").config();
 
 exports.Login = async (req, res) => {
-    const { student_pnr, login_password } = req.body;
     try {
-        const [rows] = await pool.execute(
-            'SELECT * FROM users WHERE student_pnr = ? AND login_password = ?',
+        const { student_pnr, login_password } = req.body;
+
+        console.log("student_pnr", student_pnr);
+        console.log("login_password", login_password);
+
+        const [rows] = await pool.query(
+            'SELECT * FROM students WHERE student_pnr = ? AND login_password = ?',
             [student_pnr, login_password]
         );
 
