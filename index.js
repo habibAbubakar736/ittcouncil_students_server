@@ -16,8 +16,10 @@ app.use(cors({ origin: '*' }));
 
 
 const UsersRouter = require('./Router/UsersRouter');
+const StudentsRouter = require('./Router/StudentsRouter');
 
 app.use('/Users', UsersRouter);
+app.use('/Students', StudentsRouter);
 
 
 
