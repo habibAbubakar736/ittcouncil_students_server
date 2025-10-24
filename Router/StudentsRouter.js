@@ -11,5 +11,8 @@ router.get('/GetStudentsProfile', AuthMiddleware.AuthMiddleware, StudentsProfile
 router.get('/GetUpcomingExam', AuthMiddleware.AuthMiddleware, StudentsProfile.GetUpcomingExam);
 router.get('/ExamQuestion', AuthMiddleware.AuthMiddleware, StudentsProfile.ExamQuestion);
 
+router.get('/GetStudentsProgram', AuthMiddleware.AuthMiddleware, StudentsProfile.GetStudentsProgram);
+router.get('/GetPassOutSubjects', AuthMiddleware.AuthMiddleware, StudentsProfile.GetPassOutSubjects);
+router.get('/GetFailedOutSubjects', AuthMiddleware.AuthMiddleware, StudentsProfile.GetFailedOutSubjects);
 
 module.exports = router;
