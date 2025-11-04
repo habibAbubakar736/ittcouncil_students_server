@@ -16,7 +16,6 @@ exports.GetStudentsProfile = async (req, res) => {
         return res.json({ success: false, message: "Internal server error : ", error });
     }
 }
-
 // ------------------------- upcoming exam ------------------------- // 
 exports.GetUpcomingExam = async (req, res) => {
     try {
