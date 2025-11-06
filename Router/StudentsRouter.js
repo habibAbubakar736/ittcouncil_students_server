@@ -9,6 +9,7 @@ router.get('/GetStudentsProfile', AuthMiddleware.AuthMiddleware, StudentsProfile
 
 // ------------------------- exam route ------------------------- // 
 router.get('/GetUpcomingExam', AuthMiddleware.AuthMiddleware, StudentsProfile.GetUpcomingExam);
+router.get('/GetExamInfo', AuthMiddleware.AuthMiddleware, StudentsProfile.GetExamInfo);
 router.get('/ExamQuestion', AuthMiddleware.AuthMiddleware, StudentsProfile.ExamQuestion);
 
 router.get('/GetStudentsProgram', AuthMiddleware.AuthMiddleware, StudentsProfile.GetStudentsProgram);
