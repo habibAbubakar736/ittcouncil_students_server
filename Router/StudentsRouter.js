@@ -8,9 +8,13 @@ router.get('/GetStudentsProfile', AuthMiddleware.AuthMiddleware, StudentsProfile
 
 
 // ------------------------- exam route ------------------------- // 
+router.post('/StartExam', AuthMiddleware.AuthMiddleware, StudentsProfile.StartExam);
 router.get('/GetUpcomingExam', AuthMiddleware.AuthMiddleware, StudentsProfile.GetUpcomingExam);
 router.get('/GetExamInfo', AuthMiddleware.AuthMiddleware, StudentsProfile.GetExamInfo);
 router.get('/ExamQuestion', AuthMiddleware.AuthMiddleware, StudentsProfile.ExamQuestion);
+router.get('/UpdateExamAnswer', AuthMiddleware.AuthMiddleware, StudentsProfile.UpdateExamAnswer);
+
+
 
 router.get('/GetStudentsProgram', AuthMiddleware.AuthMiddleware, StudentsProfile.GetStudentsProgram);
 router.get('/GetPassOutSubjects', AuthMiddleware.AuthMiddleware, StudentsProfile.GetPassOutSubjects);

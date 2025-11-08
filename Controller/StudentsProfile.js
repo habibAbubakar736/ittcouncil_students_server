@@ -117,7 +117,10 @@ exports.ExamQuestion = async (req, res) => {
 
         const { master_subject_id } = req.query;
 
-        const [rows] = await pool.query(`SELECT * FROM exams__questions WHERE master_subject_id = ?`, [master_subject_id])
+        const [rows] = await pool.query(`SELECT * 
+            FROM exams__answers 
+            LEFT JOIN masters__subjects ON exams__answers.master_subject_id = masters__subjects.master_subject_id 
+            WHERE exams__answers.master_subject_id = ?`, [master_subject_id])
         return res.json({ success: true, data: rows })
 
     } catch (error) {
@@ -207,3 +210,76 @@ exports.GetFailedOutSubjects = async (req, res) => {
     }
 };
 
+
+exports.StartExam = async (req, res) => {
+    try {
+        const { student_id, student_subject_id, student_program_id, master_subject_id } = req.body;
+
+        if (!student_id) return res.json({ success: false, message: "student_id is required" });
+        if (!student_subject_id) return res.json({ success: false, message: "student_subject_id is required" });
+        if (!student_program_id) return res.json({ success: false, message: "student_program_id is required" });
+        if (!master_subject_id) return res.json({ success: false, message: "master_subject_id is required" });
+
+        const [questions] = await pool.query(
+            `SELECT * FROM exams__questions WHERE master_subject_id = ?`,
+            [master_subject_id]
+        );
+
+        if (!questions || questions.length === 0) {
+            return res.json({ success: false, message: "No questions found for this subject" });
+        }
+
+        const inserts = questions.map((q) => {
+            const data = {
+                student_id,
+                student_subject_id,
+                student_program_id,
+                master_subject_id,
+                question_content: q.question_content,
+                objective_a: q.objective_a,
+                objective_b: q.objective_b,
+                objective_c: q.objective_c,
+                objective_d: q.objective_d,
+                question_answer: q.question_answer,
+                question_mark: q.question_mark,
+            };
+
+            return pool.query(`INSERT INTO exams__answers SET ?`, data);
+        });
+
+        await Promise.all(inserts);
+
+        return res.json({ success: true, message: "Exam Started Successfully!" });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error
+        });
+    }
+};
+
+
+exports.UpdateExamAnswer = async (req, res) => {
+    try {
+
+        const { exam_answer_id, given_answer } = req.body;
+
+        if (!exam_answer_id) {
+            return res.json({ success: false, message: "exam_answer_id server error" });
+        }
+
+        const exam_fields = {
+            given_answer
+        }
+
+        await pool.query(`UPDATE exams__answers SET ? WHERE exam_answer_id = ?`, [exam_fields]);
+        return res.json({ success: true, message: "answer is correct" })
+
+    } catch (error) {
+        console.log("error", error);
+        return res.json({ success: false, message: "Internal server error", error });
+    }
+}
