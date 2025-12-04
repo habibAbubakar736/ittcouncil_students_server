@@ -49,7 +49,6 @@ exports.GetUpcomingExam = async (req, res) => {
     }
 }
 
-
 exports.GetExamInfo = async (req, res) => {
     try {
 
@@ -128,7 +127,6 @@ exports.ExamQuestion = async (req, res) => {
         return res.json({ success: false, message: "Internal server error", error });
     }
 }
-
 
 exports.GetPassOutSubjects = async (req, res) => {
     try {
@@ -210,7 +208,6 @@ exports.GetFailedOutSubjects = async (req, res) => {
     }
 };
 
-
 exports.StartExam = async (req, res) => {
     try {
         const { student_id, student_subject_id, student_program_id, master_subject_id } = req.body;
@@ -220,6 +217,19 @@ exports.StartExam = async (req, res) => {
         if (!student_program_id) return res.json({ success: false, message: "student_program_id is required" });
         if (!master_subject_id) return res.json({ success: false, message: "master_subject_id is required" });
 
+        // Get subject settings
+        const [minimum] = await pool.query(
+            `SELECT minimum_question FROM masters__subjects WHERE master_subject_id = ?`,
+            [master_subject_id]
+        );
+
+        if (!minimum.length) {
+            return res.json({ success: false, message: "Invalid master_subject_id" });
+        }
+
+        const no_of_questions = minimum[0].minimum_question;
+
+        // Get all questions of this subject
         const [questions] = await pool.query(
             `SELECT * FROM exams__questions WHERE master_subject_id = ?`,
             [master_subject_id]
@@ -229,7 +239,21 @@ exports.StartExam = async (req, res) => {
             return res.json({ success: false, message: "No questions found for this subject" });
         }
 
-        const inserts = questions.map((q) => {
+        // If question bank lower than required
+        if (questions.length < no_of_questions) {
+            return res.json({
+                success: false,
+                message: `Only ${questions.length} questions available, but minimum required is ${no_of_questions}`
+            });
+        }
+
+        // Random shuffle and pick required number
+        const selectedQuestions = questions
+            .sort(() => Math.random() - 0.5)
+            .slice(0, no_of_questions);
+
+        // Insert selected questions
+        const inserts = selectedQuestions.map((q) => {
             const data = {
                 student_id,
                 student_subject_id,
@@ -249,7 +273,10 @@ exports.StartExam = async (req, res) => {
 
         await Promise.all(inserts);
 
-        return res.json({ success: true, message: "Exam Started Successfully!" });
+        return res.json({
+            success: true,
+            message: `Exam Started Successfully! (${no_of_questions} questions assigned)`
+        });
 
     } catch (error) {
         console.error(error);
@@ -260,7 +287,6 @@ exports.StartExam = async (req, res) => {
         });
     }
 };
-
 
 exports.UpdateExamAnswer = async (req, res) => {
     try {
@@ -275,7 +301,7 @@ exports.UpdateExamAnswer = async (req, res) => {
             given_answer
         }
 
-        await pool.query(`UPDATE exams__answers SET ? WHERE exam_answer_id = ?`, [exam_fields]);
+        await pool.query(`UPDATE exams__answers SET ? WHERE exam_answer_id = ?`, [exam_fields, exam_answer_id]);
         return res.json({ success: true, message: "answer is correct" })
 
     } catch (error) {
@@ -283,3 +309,191 @@ exports.UpdateExamAnswer = async (req, res) => {
         return res.json({ success: false, message: "Internal server error", error });
     }
 }
+
+exports.SubmitExam = async (req, res) => {
+    try {
+        const { student_subject_id, student_id, master_subject_id, student_program_id } = req.body;
+
+        if (!student_id) return res.json({ success: false, message: "student_id is required" });
+        if (!student_subject_id) return res.json({ success: false, message: "student_subject_id is required" });
+        if (!master_subject_id) return res.json({ success: false, message: "master_subject_id is required" });
+        if (!student_program_id) return res.json({ success: false, message: "student_program_id is required" });
+
+        // GET PASSING MARKS
+        const [subjectRows] = await pool.query(
+            `SELECT passing__marks FROM masters__subjects WHERE master_subject_id = ?`,
+            [master_subject_id]
+        );
+
+        if (!subjectRows.length) {
+            return res.json({ success: false, message: "Invalid master_subject_id" });
+        }
+
+        const passing_marks = subjectRows[0].passing__marks;
+
+        // TOTAL MARKS
+        const [totalRows] = await pool.query(`
+            SELECT SUM(question_mark) AS total_marks 
+            FROM exams__answers 
+            WHERE student_id = ? AND master_subject_id = ? AND student_subject_id = ?
+        `, [student_id, master_subject_id, student_subject_id]);
+
+        const total_marks = totalRows[0].total_marks || 0;
+
+        // OBTAINED MARKS
+        const [obtainRows] = await pool.query(`
+            SELECT SUM(question_mark) AS obtain_marks 
+            FROM exams__answers 
+            WHERE student_id = ? 
+              AND master_subject_id = ? 
+              AND student_subject_id = ?
+              AND question_answer = given_answer
+        `, [student_id, master_subject_id, student_subject_id]);
+
+        const obtain_marks = obtainRows[0].obtain_marks || 0;
+
+        let exam_status = obtain_marks >= passing_marks ? 2 : 3;
+
+        await pool.query(`
+            UPDATE students__subjects 
+            SET total_marks = ?, obtain_marks = ?, exam_status = ?
+            WHERE student_subject_id = ? 
+              AND student_id = ? 
+              AND master_subject_id = ? 
+              AND student_program_id = ?
+        `, [
+            total_marks,
+            obtain_marks,
+            exam_status,
+            student_subject_id,
+            student_id,
+            master_subject_id,
+            student_program_id
+        ]);
+
+        await pool.query(`DELETE FROM exams__answers
+             WHERE student_subject_id= ?
+             AND student_id = ?
+             AND student_subject_id = ?
+             AND student_program_id = ?
+             `, [
+            student_subject_id,
+            student_id,
+            master_subject_id,
+            student_program_id
+        ])
+
+        return res.json({
+            success: true,
+            message: "Exam submitted successfully",
+            total_marks,
+            obtain_marks,
+            passing_marks,
+            exam_status
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.json({ success: false, message: "Something went wrong", error });
+    }
+};
+
+exports.GetProvisionExams = async (req, res) => {
+    try {
+
+        const { student_id } = req.headers;
+        const { limit, page } = req.query;
+
+        let query_count = `
+        SELECT 
+        students__subjects.student_subject_id
+        FROM students__subjects
+        LEFT JOIN programs ON students__subjects.program_id = programs.program_id
+        LEFT JOIN masters__programs ON programs.master_program_id = masters__programs.master_program_id 
+        LEFT JOIN masters__subjects ON students__subjects.master_subject_id = masters__subjects.master_subject_id
+        `;
+
+        let query = `
+        SELECT 
+            students__subjects.*,
+            masters__programs.program_title,
+            masters__subjects.subject_title
+        FROM students__subjects
+        LEFT JOIN programs ON students__subjects.program_id = programs.program_id
+        LEFT JOIN masters__programs ON programs.master_program_id = masters__programs.master_program_id 
+        LEFT JOIN masters__subjects ON students__subjects.master_subject_id = masters__subjects.master_subject_id
+        `;
+
+        let conditionValue = [];
+        let conditionCols = [];
+
+        if (student_id) {
+            conditionCols.push(`students__subjects.student_id = ?`);
+            conditionValue.push(student_id);
+        }
+
+        if (conditionCols.length > 0) {
+            const whereClause = " WHERE " + conditionCols.join(" AND ");
+            query += whereClause;
+            query_count += whereClause;
+        }
+
+        query += ` ORDER BY students__subjects.student_subject_id DESC`;
+        query += ` LIMIT ?, ?`;
+
+        const response = await PaginationQuery(query_count, query, conditionValue, limit, page);
+        return res.status(200).json(response);
+
+    } catch (error) {
+        console.log("error", error);
+        return res.json({ success: false, message: "Internal server error", error });
+    }
+};
+
+exports.GetProvisionExamInfo = async (req, res) => {
+    try {
+
+        const { student_id } = req.headers;
+        const { student_subject_id } = req.query;
+
+        if (!student_subject_id) return res.json({ success: false, message: "student_subject_id is required" });
+        if (!student_id) return res.json({ success: false, message: "student_id is required" });
+
+        const [rows] = await pool.query(`
+            SELECT 
+                students__subjects.*,
+
+                masters__programs.program_title,
+                masters__subjects.subject_title,
+                masters__subjects.passing__marks,
+
+                students.student_full_name
+
+            FROM students__subjects
+            LEFT JOIN programs ON students__subjects.program_id = programs.program_id
+            LEFT JOIN masters__programs ON programs.master_program_id = masters__programs.master_program_id 
+            LEFT JOIN masters__subjects ON students__subjects.master_subject_id = masters__subjects.master_subject_id
+            LEFT JOIN students ON students__subjects.student_id = students.student_id 
+            WHERE students__subjects.student_subject_id = ? 
+            AND students__subjects.student_id = ?
+        `, [student_subject_id, student_id]);
+
+        if (rows.length === 0) {
+            return res.json({
+                success: false,
+                message: "Exam info not found"
+            });
+        }
+
+        return res.json({
+            success: true,
+            exam_info: rows[0]
+        });
+
+    } catch (error) {
+        console.log("error", error);
+        return res.json({ success: false, message: "Internal server error", error });
+    }
+};
+
+
